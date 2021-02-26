@@ -147,18 +147,39 @@ class UniswapV2Client(UniswapObject):
 
     PAIR_ABI = json.load(open(os.path.abspath(f"{os.path.dirname(os.path.abspath(__file__))}/assets/" + "IUniswapV2Pair.json")))["abi"]
 
-    def __init__(self, address, private_key, provider=None):
+    def __init__(self,
+                 address,
+                 private_key,
+                 provider=None,
+                 ABI=None,
+                 ADDRESS=None,
+                 ROUTER_ABI=None,
+                 ROUTER_ADDRESS,
+                 ERC20_ABI=None,
+                 PAIR_ABI):
         super().__init__(address, private_key, provider)
+        if ABI:
+            self.ABI = ABI
+        if ADDRESS:
+            self.ADDRESS = ADDRESS
+        if ROUTER_ABI:
+            self.ROUTER_ABI = ROUTER_ABI
+        if ROUTER_ADDRESS:
+            self.ROUTER_ADDRESS = ROUTER_ADDRESS
+        if ERC20_ABI:
+            self.ERC20_ABI = ERC20_ABI
+        if PAIR_ABI:
+            self.PAIR_ABI = PAIR_ABI
         self.contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(UniswapV2Client.ADDRESS), abi=UniswapV2Client.ABI)
+            address=Web3.toChecksumAddress(self.ADDRESS), abi=self.ABI)
         self.router = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(UniswapV2Client.ROUTER_ADDRESS), abi=UniswapV2Client.ROUTER_ABI)
+            address=Web3.toChecksumAddress(self.ROUTER_ADDRESS), abi=seif.ROUTER_ABI)
 
     # Utilities
     # -----------------------------------------------------------
     def _is_approved(self, token, amount=MAX_APPROVAL_INT):
         erc20_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(token), abi=UniswapV2Client.PAIR_ABI)
+            address=Web3.toChecksumAddress(token), abi=self.PAIR_ABI)
         print(erc20_contract, token)
         approved_amount = erc20_contract.functions.allowance(self.address, self.router.address).call()
         return approved_amount >= amount
@@ -248,7 +269,7 @@ class UniswapV2Client(UniswapObject):
         """
         if query_chain:
             return self.router.functions.factory().call()
-        return UniswapV2Client.ADDRESS
+        return self.ADDRESS
 
     def get_weth_address(self):
         """
@@ -522,7 +543,7 @@ class UniswapV2Client(UniswapObject):
         :return: Address of the pair token with the lower sort order
         """
         pair_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(pair), abi=UniswapV2Client.PAIR_ABI)
+            address=Web3.toChecksumAddress(pair), abi=self.PAIR_ABI)
         return pair_contract.functions.token0().call()
 
     def get_token_1(self, pair):
@@ -533,7 +554,7 @@ class UniswapV2Client(UniswapObject):
         :return: Address of the pair token with the lower sort order.
         """
         pair_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(pair), abi=UniswapV2Client.PAIR_ABI)
+            address=Web3.toChecksumAddress(pair), abi=self.PAIR_ABI)
         return pair_contract.functions.token1().call()
 
     def get_reserves(self, token_a, token_b):
@@ -552,7 +573,7 @@ class UniswapV2Client(UniswapObject):
         pair_contract = self.conn.eth.contract(
             address=Web3.toChecksumAddress(
                 UniswapV2Utils.pair_for(self.get_factory(), token_a, token_b)),
-                abi=UniswapV2Client.PAIR_ABI
+                abi=self.PAIR_ABI
             )
         reserve = pair_contract.functions.getReserves().call()
         return reserve if token0 == token_a else [reserve[1], reserve[0], reserve[2]]
@@ -566,7 +587,7 @@ class UniswapV2Client(UniswapObject):
         :return: Commutative price relative to token_0.
         """
         pair_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(pair), abi=UniswapV2Client.PAIR_ABI)
+            address=Web3.toChecksumAddress(pair), abi=self.PAIR_ABI)
         return pair_contract.functions.price0CumulativeLast().call()
 
     def get_price_1_cumulative_last(self, pair):
@@ -578,7 +599,7 @@ class UniswapV2Client(UniswapObject):
         :return: Commutative price relative to token_1.
         """
         pair_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(pair), abi=UniswapV2Client.PAIR_ABI)
+            address=Web3.toChecksumAddress(pair), abi=self.PAIR_ABI)
         return pair_contract.functions.price1CumulativeLast().call()
 
     def get_k_last(self, pair):
@@ -590,7 +611,7 @@ class UniswapV2Client(UniswapObject):
         :return: Product of the reserves.
         """
         pair_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(pair), abi=UniswapV2Client.PAIR_ABI)
+            address=Web3.toChecksumAddress(pair), abi=self.PAIR_ABI)
         return pair_contract.functions.kLast().call()
 
     def get_amounts_out(self, amount_in, path):
