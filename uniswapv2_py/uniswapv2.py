@@ -1,8 +1,13 @@
-import os
 import json
+import os
+import re
 from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput
-import re
+
+
+WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+WBNB = '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c'
+
 
 class UniswapV2Utils(object):
 
@@ -193,7 +198,7 @@ class UniswapV2Client(UniswapObject):
 
         print("Approving {} of {}".format(max_approval, token))
         erc20_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(token), abi=UniswapV2Client.ERC20_ABI)
+            address=Web3.toChecksumAddress(token), abi=self.ERC20_ABI)
 
         func = erc20_contract.functions.approve(self.router.address, max_approval)
         params = self._create_transaction_params()
@@ -637,3 +642,50 @@ class UniswapV2Client(UniswapObject):
             )
             amounts.insert(0, current_amount)
         return amounts
+
+    # Custom need
+    def get_pair_details(self, pair_address, base_address=WBNB):
+        addr0 = self.get_token_0(pair_address)
+        addr1 = self.get_token_1(pair_address)
+        (reserve0, reserve1, _) = self.get_reserves(addr0, addr1)
+
+        # calculate reserveETH, througth base_address
+        p0 = self.get_pair(addr0, base_address)
+        p01, p02 = self.get_token_0(p0), self.get_token_1(p0)
+        reserve01, reserve02, _ = self.get_reserves(p01, p02)
+        p1 = self.get_pair(addr1, base_address)
+        p11, p12 = self.get_token_0(p1), self.get_token_1(p1)
+        reserve11, reserve12, _ = self.get_reserves(p11, p12)
+        if p01 == addr0:
+            derivedETH0 = reserve01 if not reserve01 else reserve02 / reserve01
+        else:
+            derivedETH0 = reserve02 if not reserve02 else reserve01 / reserve02
+        if p11 == addr1:
+            derivedETH1 = reserve11 if not reserve11 else reserve12 / reserve11
+        else:
+            derivedETH1 = reserve12 if not reserve12 else reserve11 / reserve12
+
+        # decimals and symbol
+        erc0 = self.conn.eth.contract(address=Web3.toCheckSumAddress(addr0), abi=self.ERC20_ABI)
+        erc1 = self.conn.eth.contract(address=Web3.toChecksumAddress(addr1), abi=self.ERC20_ABI)
+        symbol0 = erc0.functions.symbol().call()
+        symbol1 = erc1.functions.symbol().call()
+        decimals0 = erc0.functions.decimals().call()
+        decimals1 = erc1.functions.decimals().call()
+        reserveETH = reserve0 * derivedETH0 + reserve1 * derivedETH1
+        return {
+            'id': pair_address,
+            'reserveETH': reserveETH,
+            'reserve0': reserve0,
+            'reserve1': reserve1,
+            'token0': {
+                'symbol': symbol0,
+                'decimals': decimals0,
+                'derivedETH': derivedETH0
+            },
+            'token1': {
+                'symbol': symbol1,
+                'decimals': decimals1,
+                'derivedETH': derivedETH1
+            }
+        }

@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 import setuptools
-import uniswap
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="uniswap-v2-asynctomatic",  # TODO remove username suffix before PyPI distribution
-    version=uniswap.__version__,
+    name="uniswapv2-py",  # TODO remove username suffix before PyPI distribution
+    version='dev',
     author="Asynctomatic",
     author_email="asynctomatic@gmail.com",
     description="A unofficial wrapper for Uniswap V2",
@@ -15,7 +14,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/asynctomatic/uniswap-v2-py",
     packages=setuptools.find_packages(),
-    package_data={"uniswap": ["assets/*"]},
+    package_data={"uniswapv2_py": ["assets/*"]},
     install_requires=["web3"],
     classifiers=[
         "Programming Language :: Python :: 3",
