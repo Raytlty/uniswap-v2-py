@@ -104,12 +104,14 @@ class UniswapV2Utils(object):
 
 class UniswapObject(object):
 
-    def __init__(self, address, private_key, provider=None):
+    def __init__(self, address, private_key, provider=None, request_kwargs=None):
         self.address = Web3.toChecksumAddress(address)
         self.private_key = private_key
 
         self.provider = os.environ["PROVIDER"] if not provider else provider
         if re.match(r'^https*:', self.provider):
+            if request_kwargs is None:
+                request_kwargs = {'timeout': 60}
             provider = Web3.HTTPProvider(self.provider, request_kwargs={"timeout": 60})
         elif re.match(r'^ws*:', self.provider):
             provider = Web3.WebsocketProvider(self.provider)
@@ -152,17 +154,12 @@ class UniswapV2Client(UniswapObject):
 
     PAIR_ABI = json.load(open(os.path.abspath(f"{os.path.dirname(os.path.abspath(__file__))}/assets/" + "IUniswapV2Pair.json")))["abi"]
 
-    def __init__(self,
-                 address,
-                 private_key,
-                 provider=None,
-                 ABI=None,
-                 ADDRESS=None,
-                 ROUTER_ABI=None,
-                 ROUTER_ADDRESS,
-                 ERC20_ABI=None,
-                 PAIR_ABI):
-        super().__init__(address, private_key, provider)
+    def __init__(self, address, private_key, provider=None,
+                 ABI=None, ADDRESS=None,
+                 ROUTER_ABI=None, ROUTER_ADDRESS=None,
+                 ERC20_ABI=None, PAIR_ABI=None,
+                 request_kwargs=None):
+        super().__init__(address, private_key, provider, request_kwargs)
         if ABI:
             self.ABI = ABI
         if ADDRESS:
@@ -178,7 +175,7 @@ class UniswapV2Client(UniswapObject):
         self.contract = self.conn.eth.contract(
             address=Web3.toChecksumAddress(self.ADDRESS), abi=self.ABI)
         self.router = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(self.ROUTER_ADDRESS), abi=seif.ROUTER_ABI)
+            address=Web3.toChecksumAddress(self.ROUTER_ADDRESS), abi=self.ROUTER_ABI)
 
     # Utilities
     # -----------------------------------------------------------
@@ -562,7 +559,7 @@ class UniswapV2Client(UniswapObject):
             address=Web3.toChecksumAddress(pair), abi=self.PAIR_ABI)
         return pair_contract.functions.token1().call()
 
-    def get_reserves(self, token_a, token_b):
+    def get_reserves(self, token_a, token_b, pair_address=None):
         """
         Gets the reserves of token_0 and token_1 used to price trades
         and distribute liquidity as well as the timestamp of the last block
@@ -575,11 +572,14 @@ class UniswapV2Client(UniswapObject):
             - liquidity - Unix timestamp of the block containing the last pair interaction.
         """
         (token0, token1) = UniswapV2Utils.sort_tokens(token_a, token_b)
-        pair_contract = self.conn.eth.contract(
-            address=Web3.toChecksumAddress(
-                UniswapV2Utils.pair_for(self.get_factory(), token_a, token_b)),
-                abi=self.PAIR_ABI
-            )
+        if pair_address is None:
+            pair_contract = self.conn.eth.contract(
+                address=Web3.toChecksumAddress(
+                    UniswapV2Utils.pair_for(self.get_factory(), token_a, token_b)),
+                    abi=self.PAIR_ABI
+                )
+        else:
+            pair_contract = self.conn.eth.contract(address=Web3.toChecksumAddress(pair_address), abi=self.PAIR_ABI)
         reserve = pair_contract.functions.getReserves().call()
         return reserve if token0 == token_a else [reserve[1], reserve[0], reserve[2]]
 
@@ -647,15 +647,15 @@ class UniswapV2Client(UniswapObject):
     def get_pair_details(self, pair_address, base_address=WBNB):
         addr0 = self.get_token_0(pair_address)
         addr1 = self.get_token_1(pair_address)
-        (reserve0, reserve1, _) = self.get_reserves(addr0, addr1)
+        (reserve0, reserve1, _) = self.get_reserves(addr0, addr1, pair_address)
 
         # calculate reserveETH, througth base_address
         p0 = self.get_pair(addr0, base_address)
         p01, p02 = self.get_token_0(p0), self.get_token_1(p0)
-        reserve01, reserve02, _ = self.get_reserves(p01, p02)
+        reserve01, reserve02, _ = self.get_reserves(p01, p02, p0)
         p1 = self.get_pair(addr1, base_address)
         p11, p12 = self.get_token_0(p1), self.get_token_1(p1)
-        reserve11, reserve12, _ = self.get_reserves(p11, p12)
+        reserve11, reserve12, _ = self.get_reserves(p11, p12, p1)
         if p01 == addr0:
             derivedETH0 = reserve01 if not reserve01 else reserve02 / reserve01
         else:
@@ -666,7 +666,7 @@ class UniswapV2Client(UniswapObject):
             derivedETH1 = reserve12 if not reserve12 else reserve11 / reserve12
 
         # decimals and symbol
-        erc0 = self.conn.eth.contract(address=Web3.toCheckSumAddress(addr0), abi=self.ERC20_ABI)
+        erc0 = self.conn.eth.contract(address=Web3.toChecksumAddress(addr0), abi=self.ERC20_ABI)
         erc1 = self.conn.eth.contract(address=Web3.toChecksumAddress(addr1), abi=self.ERC20_ABI)
         symbol0 = erc0.functions.symbol().call()
         symbol1 = erc1.functions.symbol().call()
@@ -681,11 +681,13 @@ class UniswapV2Client(UniswapObject):
             'token0': {
                 'symbol': symbol0,
                 'decimals': decimals0,
-                'derivedETH': derivedETH0
+                'derivedETH': derivedETH0,
+                'id': addr0
             },
             'token1': {
                 'symbol': symbol1,
                 'decimals': decimals1,
-                'derivedETH': derivedETH1
+                'derivedETH': derivedETH1,
+                'id': addr1
             }
         }
